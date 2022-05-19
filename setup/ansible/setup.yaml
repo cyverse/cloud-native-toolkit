@@ -1,0 +1,5 @@
+- hosts: localhost
+  gather_facts: true
+  tags: argo
+  roles:
+  - role: ansible-k8s-argo

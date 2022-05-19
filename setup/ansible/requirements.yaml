@@ -1,0 +1,5 @@
+# roles: 
+# - src: cyverse-ansible.docker
+
+collections:
+- kubernetes.core
