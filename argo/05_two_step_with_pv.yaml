@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: arg-passing-two-step-
+spec:
+  entrypoint: hello-hello-hello
+  arguments:
+    parameters:
+    - name: message
+
+  volumeClaimTemplates:
+  - metadata:
+      name: workdir
+    spec:
+      accessModes:
+        - "ReadWriteMany"
+      storageClassName: manual
+      resources:
+        requests:
+          storage: 20Gi
+
+  # This spec contains two templates: hello-hello-hello and whalesay
+  templates:
+  - name: hello-hello-hello
+    # Instead of just running a container
+    # This template has a sequence of steps
+    steps:
+    - - name: first-step
+        template: word-count
+        arguments:
+          parameters:
+          - name: message
+            value: "{{workflow.parameters.message}}"
+    - - name: second-step
+        template: whalesay
+
+  # define your templates here
+  - name: whalesay
+    container:
+      image: docker/whalesay
+      command: [/bin/sh, -c]
+      args: ["cat /mnt/vol/{{workflow.name}}-count.txt | cowsay"]
+      volumeMounts:
+      - name: workdir
+        mountPath: /mnt/vol
+
+  - name: word-count
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: alpine
+      command: [/bin/sh, -c]
+      args: ["echo '{{inputs.parameters.message}}' | wc -w > /mnt/vol/{{workflow.name}}-count.txt"]
+      volumeMounts:
+      - name: workdir
+        mountPath: /mnt/vol

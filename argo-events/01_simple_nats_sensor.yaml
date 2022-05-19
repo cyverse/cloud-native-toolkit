@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: nats
+spec:
+  template:
+    serviceAccountName: operate-workflow-sa
+  dependencies:
+    - name: nats-dep
+      eventSourceName: nats
+      eventName: workflow1
+  triggers:
+    - template:
+        name: nats-workflow-trigger
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: nats-workflow-
+              spec:
+                entrypoint: whalesay
+                arguments:
+                  parameters:
+                  - name: message
+                    value: hello world
+                  - name: tid
+                    value: ""
+                templates:
+                - name: whalesay
+                  inputs:
+                    parameters:
+                    - name: message
+                    - name: tid
+                  container:
+                    image: docker/whalesay:latest
+                    command: [cowsay]
+                    args: ["message = {{inputs.parameters.message}}, tid = {{inputs.parameters.tid}}"]
+          parameters:
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.message }}"
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.tid }}"
+              dest: spec.arguments.parameters.1.value

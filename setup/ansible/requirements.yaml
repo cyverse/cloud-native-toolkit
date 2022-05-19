@@ -1,5 +1,5 @@
-# roles: 
-# - src: cyverse-ansible.docker
+roles: 
+- src: cyverse-ansible.ansible_k8s_argo
 
 collections:
 - kubernetes.core

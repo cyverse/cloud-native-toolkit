@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: script-two-step-
+spec:
+  entrypoint: hello-hello-hello
+  arguments:
+    parameters:
+    - name: message
+    - name: is_url # if not url, then assume string
+
+  # This spec contains two templates: hello-hello-hello and whalesay
+  templates:
+  - name: hello-hello-hello
+    # Instead of just running a container
+    # This template has a sequence of steps
+    dag:
+      tasks:
+        - name: task-word-count
+          template: word-count
+          arguments:
+            parameters:
+            - name: message
+              value: "{{workflow.parameters.message}}"
+            - name: is_url
+              value: "{{workflow.parameters.is_url}}"
+        - name: task-whalesay
+          dependencies: [task-word-count]
+          template: whalesay
+          arguments:
+            parameters:
+            - name: message
+              value: "{{tasks.task-word-count.outputs.parameters.output-param-count}}"
+
+  # define your templates here
+  - name: whalesay
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["Total words found is {{inputs.parameters.message}}"]
+
+  - name: word-count
+    inputs:
+      parameters:
+      - name: message
+      - name: is_url
+    script:
+      image: alpine
+      command: [sh]
+      source: |
+        if [ "{{inputs.parameters.is_url}}" = "yes" -o "{{inputs.parameters.is_url}}" = "true" -o "{{inputs.parameters.is_url}}" = "1" ]; then
+          wget -q -O - {{inputs.parameters.message}} |wc -w >/count.txt
+        else
+          echo "{{inputs.parameters.message}}" | wc -w >/count.txt
+        fi
+    outputs:
+      parameters:
+        - name: output-param-count
+          valueFrom:
+            path: /count.txt

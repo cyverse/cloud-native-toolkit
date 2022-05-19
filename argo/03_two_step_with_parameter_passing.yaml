@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: arg-passing-two-step-
+spec:
+  entrypoint: hello-hello-hello
+  arguments:
+    parameters:
+    - name: message
+
+  # This spec contains two templates: hello-hello-hello and whalesay
+  templates:
+  - name: hello-hello-hello
+    # Instead of just running a container
+    # This template has a sequence of steps
+    steps:
+    - - name: first-step
+        template: word-count
+        arguments:
+          parameters:
+          - name: message
+            value: "{{workflow.parameters.message}}"
+    - - name: second-step
+        template: whalesay
+        arguments:
+          parameters:
+          - name: message
+            value: "{{steps.first-step.outputs.parameters.output-param-count}}"
+
+  # define your templates here
+  - name: whalesay
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["{{inputs.parameters.message}}"]
+
+  - name: word-count
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: alpine
+      command: [/bin/sh, -c]
+      args: ["echo '{{inputs.parameters.message}}' | wc -w > /count.txt"]
+    outputs:
+      parameters:
+        - name: output-param-count
+          valueFrom:
+            path: /count.txt

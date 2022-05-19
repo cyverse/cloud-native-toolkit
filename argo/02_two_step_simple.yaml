@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: simple-two-step-
+spec:
+  entrypoint: hello-hello-hello
+
+  # This spec contains two templates: hello-hello-hello and whalesay
+  templates:
+  - name: hello-hello-hello
+    # Instead of just running a container
+    # This template has a sequence of steps
+    steps:
+    - - name: first-step
+        template: whalesay
+        arguments:
+          parameters:
+          - name: message
+            value: "this is hello 1"
+    - - name: second-step
+        template: whalesay
+        arguments:
+          parameters:
+          - name: message
+            value: "this is hello 2"
+
+  # define your templates here
+  - name: whalesay
+    inputs:
+      parameters:
+      - name: message
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["{{inputs.parameters.message}}"]

@@ -1,0 +1,108 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: nats
+spec:
+  template:
+    serviceAccountName: operate-workflow-sa
+  dependencies:
+    - name: nats-dep
+      eventSourceName: nats
+      eventName: workflow1
+  triggers:
+    - template:
+        name: nats-workflow-trigger
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: nats-workflow-
+              spec:
+                entrypoint: hello-hello-hello
+                arguments:
+                  parameters:
+                  - name: message
+                    value: hello world
+                  - name: tid
+                    value: ""
+                templates:
+
+                # This template is a dag
+                - name: hello-hello-hello
+                  dag:
+                    tasks:
+                      - name: task-word-count
+                        template: word-count
+                        arguments:
+                          parameters:
+                          - name: message
+                            value: "{{workflow.parameters.message}}"
+                      - name: task-whalesay
+                        depends: "task-word-count.Succeeded"
+                        template: whalesay
+                        arguments:
+                          parameters:
+                          - name: message
+                            value: "{{tasks.task-word-count.outputs.parameters.output-param-count}}"
+                          - name: tid
+                            value: "{{workflow.parameters.tid}}"
+                      # see https://argoproj.github.io/argo-workflows/enhanced-depends-logic/
+                      # if using steps, use the "when" clause instead
+                      - name: celebrate
+                        depends: "task-whalesay.Succeeded"
+                        template: celebrate
+                      - name: cry
+                        depends: "task-whalesay.Failed"
+                        template: cry
+
+
+                # This template is for whalesay
+                - name: whalesay
+                  inputs:
+                    parameters:
+                    - name: message
+                    - name: tid
+                  container:
+                    image: docker/whalesay:latest
+                    command: [cowsay]
+                    args: ["total word count is {{inputs.parameters.message}}, tid = {{inputs.parameters.tid}}"]
+
+                # This template is for word-count
+                - name: word-count
+                  inputs:
+                    parameters:
+                    - name: message
+                  container:
+                    image: alpine
+                    command: [/bin/sh, -c]
+                    args: ["echo '{{inputs.parameters.message}}' | wc -w | tee /count.txt"]
+                  outputs:
+                    parameters:
+                      - name: output-param-count
+                        valueFrom:
+                          path: /count.txt
+
+                # These are exit handlers
+                - name: celebrate
+                  container:
+                    image: alpine:latest
+                    command: [sh, -c]
+                    args: ["echo 'hooray! You could use this step to write success into a metadata service'"]
+                - name: cry
+                  container:
+                    image: alpine:latest
+                    command: [sh, -c]
+                    args: ["echo 'boohoo! You could use this step to write failure into a metadata service'"]
+
+          parameters:
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.message }}"
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.tid }}"
+              dest: spec.arguments.parameters.1.value

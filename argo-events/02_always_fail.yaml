@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: nats2
+spec:
+  template:
+    serviceAccountName: operate-workflow-sa
+  dependencies:
+    - name: nats-dep
+      eventSourceName: nats
+      eventName: workflow2
+  triggers:
+    - template:
+        name: nats-workflow-trigger2
+        k8s:
+          operation: create
+          source:
+            resource:
+              apiVersion: argoproj.io/v1alpha1
+              kind: Workflow
+              metadata:
+                generateName: always-fail-
+              spec:
+                entrypoint: hello-hello-hello
+                arguments:
+                  parameters:
+                  - name: message
+                    value: hello world
+                  - name: tid
+                    value: ""
+                templates:
+
+                # This template is a dag
+                - name: hello-hello-hello
+                  dag:
+                    tasks:
+                      - name: always-false
+                        template: always-false
+                      - name: celebrate
+                        depends: "always-false.Succeeded"
+                        template: celebrate
+                      - name: cry
+                        depends: "always-false.Failed"
+                        template: cry
+
+                # This template is for always false
+                - name: always-false
+                  container:
+                    image: alpine:latest
+                    command: ["false"]
+
+                # These are exit handlers
+                - name: celebrate
+                  container:
+                    image: alpine:latest
+                    command: [sh, -c]
+                    args: ["echo 'hooray! You could use this step to write success into a metadata service'"]
+                - name: cry
+                  container:
+                    image: alpine:latest
+                    command: [sh, -c]
+                    args: ["echo 'boohoo! You could use this step to write failure into a metadata service'"]
+
+          parameters:
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.message }}"
+              dest: spec.arguments.parameters.0.value
+            - src:
+                dependencyName: nats-dep
+                dataTemplate: "{{ .Input.body.tid }}"
+              dest: spec.arguments.parameters.1.value

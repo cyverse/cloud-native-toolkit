@@ -2,4 +2,7 @@
   gather_facts: true
   tags: argo
   roles:
-  - role: ansible-k8s-argo
+  - role: cyverse-ansible.ansible_k8s_argo
+  tasks:
+  - name: SHELL; deploying mock api for the toolkit
+    shell: kubectl apply -f ../api/api.yaml
